@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>OCPP Proxy Dashboard</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(145deg, #dbeafe, #e0f2fe);
+      padding: 30px;
+      color: #1a202c;
+    }
+    h1 {
+      font-size: 2.5rem;
+      margin-bottom: 2rem;
+      color: #1e3a8a;
+      text-align: center;
+    }
+    h2 {
+      font-size: 1.6rem;
+      margin-top: 2rem;
+      margin-bottom: 1rem;
+      color: #1d4ed8;
+      border-left: 5px solid #3b82f6;
+      padding-left: 10px;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background-color: #ffffff;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.05);
+      margin-bottom: 2rem;
+      table-layout: fixed;
+    }
+    th, td {
+      padding: 10px;
+      font-size: 0.9rem;
+      border-bottom: 1px solid #e2e8f0;
+      word-wrap: break-word;
+    }
+    th {
+      background-color: #3b82f6;
+      color: white;
+      text-align: left;
+      font-weight: 600;
+    }
+    tr:hover {
+      background-color: #f0f9ff;
+    }
+    .status-online {
+      color: #16a34a;
+      font-weight: bold;
+    }
+    .status-offline {
+      color: #6b7280;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>🔌 OCPP Proxy Dashboard</h1>
+  <div class="container">
+    <h2>📡 Active Charging Sessions</h2>
+    <table id="sessions-active">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Charger ID</th>
+          <th>Start Time</th>
+          <th>Stop Time</th>
+          <th>Meter Start (kWh)</th>
+          <th>Meter Stop (kWh)</th>
+          <th>Stop Reason</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <h2>📈 Session History</h2>
+    <table id="sessions-history">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Charger ID</th>
+          <th>Start Time</th>
+          <th>Stop Time</th>
+          <th>Meter Start (kWh)</th>
+          <th>Meter Stop (kWh)</th>
+          <th>Stop Reason</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <h2>🔌 Known Chargers</h2>
+    <table id="chargers">
+      <thead>
+        <tr>
+          <th>Charger ID</th>
+          <th>Model</th>
+          <th>Vendor</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script>
+    async function loadDashboardData() {
+      try {
+        const sessionsRes = await fetch('http://localhost:5281/api/Cpms/GetAllSessions');
+        const chargersRes = await fetch('http://localhost:5281/api/Cpms/GetAllChargers');
+
+        const sessions = await sessionsRes.json();
+        const chargers = await chargersRes.json();
+
+        const activeSessions = sessions.filter(s => !s.timeStop || s.timeStop === "0001-01-01T00:00:00");
+        const stoppedSessions = sessions.filter(s => s.timeStop && s.timeStop !== "0001-01-01T00:00:00");
+
+        document.querySelector('#sessions-active tbody').innerHTML = activeSessions.map(s => `
+          <tr>
+            <td>${s.id}</td>
+            <td>${s.ocppChargerId}</td>
+            <td>${new Date(s.timeStart).toLocaleString()}</td>
+            <td>-</td>
+            <td>${(s.meterStart ?? 0).toFixed(2)}</td>
+            <td>-</td>
+            <td>-</td>
+          </tr>
+        `).join('');
+
+        document.querySelector('#sessions-history tbody').innerHTML = stoppedSessions.map(s => `
+          <tr>
+            <td>${s.id}</td>
+            <td>${s.ocppChargerId}</td>
+            <td>${new Date(s.timeStart).toLocaleString()}</td>
+            <td>${new Date(s.timeStop).toLocaleString()}</td>
+            <td>${(s.meterStart ?? 0).toFixed(2)}</td>
+            <td>${(s.meterStop ?? 0).toFixed(2)}</td>
+            <td>${s.stopReason ?? '-'}</td>
+          </tr>
+        `).join('');
+
+        const chargerRows = chargers.map(c => {
+          const status = c.model ? '<span class="status-online">Online</span>' : '<span class="status-offline">Offline</span>';
+          return `
+            <tr>
+              <td>${c.ocppChargerId}</td>
+              <td>${c.model ?? '-'}</td>
+              <td>${c.vendor ?? '-'}</td>
+              <td>${status}</td>
+            </tr>
+          `;
+        }).join('');
+        document.querySelector('#chargers tbody').innerHTML = chargerRows;
+      } catch (error) {
+        console.error('Error loading dashboard data:', error);
+      }
+    }
+
+    loadDashboardData();
+    setInterval(loadDashboardData, 5000);
+  </script>
+</body>
+</html>
